@@ -15,6 +15,10 @@ void All_Init(void)
 {
     WDTCTL = WDTPW | WDTHOLD;       // stop watchdog timer
 
+    BCSCTL3 = LFXT1S1 + XCAP0 + XT2OF + LFXT1OF;
+    BCSCTL2 = SELM_0 + DIVM_0 + DIVS_1;             // MCLK to DCOCLK with /1 and SMCLK to DCOCLK with /2
+    BCSCTL1 = XT2OFF + 0;
+
     P1DIR |= 0x01;                  // configure P1.0 as output
 }
 
