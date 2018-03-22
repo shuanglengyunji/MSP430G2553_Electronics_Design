@@ -1,8 +1,7 @@
 #include <msp430.h>				
 
-
 /**
- * blink.c
+ *
  */
 void main(void)
 {
