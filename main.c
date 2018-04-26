@@ -9,10 +9,10 @@
  *   P1.1	UART1 TX
  *   P1.2	UART1 RX
  *   P1.3	KEY
- *   P1.4
+ *   P1.4	(SMCLK)
  *   P1.5
  *   P1.6	LED2
- *   P1.7
+ *   P1.7	ADC10.7
  *   P2.0
  *   P2.1	TA1.1
  *   P2.2
@@ -31,6 +31,8 @@
 #define PWM_Duty_Cycle		75		//PWM占空比，0-100，最好不要取太接近0或接近100
 
 unsigned int counter_5ms = 0;
+
+unsigned int adc_in = 0;
 
 int main(void)
 {
@@ -58,6 +60,9 @@ int main(void)
 	BCSCTL3 = LFXT1S1 + XCAP0 + XT2OF + LFXT1OF;    // Use VLOCLK for ACLK
 	BCSCTL2 = SELM_0 + DIVM_0 + DIVS_1;             // MCLK to DCOCLK with /1 and SMCLK to DCOCLK with /2
 
+	//P1DIR |= 0x13;                            // P1.0,1 and P1.4 outputs
+	//P1SEL |= 0x11;                            // P1.0,4 ACLK, SMCLK output
+
 	//////////////////////////////////////////////////////////////
 
 	//Timer0_A 5ms Interrupt
@@ -81,12 +86,21 @@ int main(void)
 
 	//////////////////////////////////////////////////////////////
 
-	__bis_SR_register(GIE);       // Enable interrupt
+	//ADC10
+	//ADC自动循环采样，并将结果存入adc_in
+	ADC10CTL0 = ADC10SHT_2 + ADC10ON + MSC;		// ADC10ON + 循环采样
+	ADC10CTL1 = INCH_7 + CONSEQ_2;             	// input A7 + 重复采样模式
+	ADC10AE0 |= 0x80;                         	// PA.7 ADC option select
+	ADC10DTC0 |= ADC10CT;						// 连续采样
+	ADC10DTC1 = 0x01;
+	ADC10SA = (unsigned int)&adc_in;
+	ADC10CTL0 |= ENC + ADC10SC;					// 开始采样
 
 	//////////////////////////////////////////////////////////////
 
-	unsigned int led_counter_1 = 0;
-	unsigned int led_counter_2 = 0;
+	__bis_SR_register(GIE);       // Enable interrupt
+
+	//////////////////////////////////////////////////////////////
 
 	while(1)
 	{
@@ -96,11 +110,14 @@ int main(void)
 
 			///////////////////////////////////////////////////////
 
+			static unsigned int led_counter_1 = 0;
+			static unsigned int led_counter_2 = 0;
+
 			led_counter_1++;
 			if(led_counter_1 > 50)
 			{
 				led_counter_1 = 0;
-				P1OUT ^= 0x01;      	// Toggle P1.0
+				//P1OUT ^= 0x01;      	// Toggle P1.0
 			}
 
 			led_counter_2++;
@@ -112,9 +129,11 @@ int main(void)
 
 			////////////////////////////////////////////////////////
 
-
-
-
+			// 电压实际值 = adc_in / 1024 * 3.3V
+			if (adc_in < 0x1FF)							// 低于1/2参考电压，LED1熄灭，高于1/2参考电压时，LED1点亮
+				P1OUT &= ~0x01;                       	// Clear P1.0 LED off
+			else
+				P1OUT |= 0x01;                        	// Set P1.0 LED on
 		}
 	}
 }
