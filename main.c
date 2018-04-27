@@ -72,6 +72,7 @@ int main(void)
 
 	//////////////////////////////////////////////////////////////
 
+	//PWM
 	unsigned int pwm_freq_tmp = 8000000/PWM_Frequence-1;						//CCR0的计数值代表周期
 	unsigned int pwm_duty_cycle_tmp = (PWM_Duty_Cycle/100.f) * pwm_freq_tmp;	//CCR1的比较值代表占空比
 
@@ -97,6 +98,20 @@ int main(void)
 	ADC10CTL0 |= ENC + ADC10SC;					// 开始采样
 
 	//////////////////////////////////////////////////////////////
+
+	//UART
+
+	P1SEL |= BIT1 + BIT2 ;                     	// P1.1 = RXD, P1.2=TXD
+	P1SEL2 |= BIT1 + BIT2;
+	UCA0CTL1 |= UCSSEL_2;                     	// SMCLK
+	UCA0BR0 = 69;                              	// 8MHz 115200
+	UCA0BR1 = 0;                              	// 8MHz 115200
+	UCA0MCTL = UCBRS2 + UCBRS0;               	// Modulation UCBRSx = 5
+	UCA0CTL1 &= ~UCSWRST;                     	// **Initialize USCI state machine**
+	IE2 |= UCA0RXIE;                          	// Enable USCI_A0 RX interrupt
+
+	//////////////////////////////////////////////////////////////
+
 
 	__bis_SR_register(GIE);       // Enable interrupt
 
@@ -138,6 +153,20 @@ int main(void)
 	}
 }
 
+// Echo back RXed character, confirm TX buffer is ready first
+#if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
+#pragma vector=USCIAB0RX_VECTOR
+__interrupt void USCI0RX_ISR(void)
+#elif defined(__GNUC__)
+void __attribute__ ((interrupt(USCIAB0RX_VECTOR))) USCI0RX_ISR (void)
+#else
+#error Compiler not supported!
+#endif
+{
+	while (!(IFG2&UCA0TXIFG));                // USCI_A0 TX buffer ready?
+	UCA0TXBUF = UCA0RXBUF;                    // TX -> RXed character
+}
+
 // Timer A0 interrupt service routine
 #if defined(__TI_COMPILER_VERSION__) || defined(__IAR_SYSTEMS_ICC__)
 #pragma vector=TIMER0_A0_VECTOR
@@ -149,6 +178,5 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer_A (void)
 #endif
 {
 	counter_5ms++;
-
 	CCR0 += 40000;                            // Add Offset to CCR0			5ms中断周期
 }
