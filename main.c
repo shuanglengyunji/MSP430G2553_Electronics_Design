@@ -32,7 +32,7 @@
 #define u32 unsigned long
 
 u16 counter_5ms = 0;
-u16 counter_100ms = 0;
+u16 counter_500ms = 0;
 
 u32 Pwm_Frequence = 1000;	//PWM频率，单位是Hz，最低频率123Hz（大约是这个数),最高0.8M就差不多了（这个时候占空比已经不准了）
 u8 Pwm_Duty_Cycle = 75;		//PWM占空比，0-100，最好不要取太接近0或接近100
@@ -182,9 +182,9 @@ int main(void)
 
 		}
 
-		if(counter_100ms >= 100)	//5ms周期
+		if(counter_500ms >= 100)	//500ms周期
 		{
-			counter_100ms = 0;
+			counter_500ms = 0;
 
 			UART_Send_Byte(adc_in);	//发送电压采集值，但只能发送低八位
 		}
@@ -226,6 +226,6 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer_A (void)
 #endif
 {
 	counter_5ms++;
-	counter_100ms++;
+	counter_500ms++;
 	CCR0 += 40000;                            // Add Offset to CCR0			5ms中断周期
 }
