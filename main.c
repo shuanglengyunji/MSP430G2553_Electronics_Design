@@ -27,35 +27,69 @@
 
 #include <msp430.h>
 
-#define PWM_Frequence		1000	//PWM频率，单位是Hz，最低频率123Hz（大约是这个数）
-#define PWM_Duty_Cycle		75		//PWM占空比，0-100，最好不要取太接近0或接近100
+#define u8 unsigned char
+#define u16 unsigned int
+#define u32 unsigned long
 
-unsigned int counter_5ms = 0;
+u16 counter_5ms = 0;
+u16 counter_100ms = 0;
 
-unsigned int adc_in = 0;
+u32 Pwm_Frequence = 1000;	//PWM频率，单位是Hz，最低频率123Hz（大约是这个数),最高0.8M就差不多了（这个时候占空比已经不准了）
+u8 Pwm_Duty_Cycle = 75;		//PWM占空比，0-100，最好不要取太接近0或接近100
+u16 adc_in = 0;
+
+/* *****************************
+ * UART_Send_Byte
+ * Input:
+ * byte 1个待发送字节
+ * *****************************/
+void UART_Send_Byte(u8 byte)
+{
+	while (!(IFG2&UCA0TXIFG));                	// USCI_A0 TX buffer ready?
+	UCA0TXBUF = byte;                    		// TX -> RXed character
+}
+
+/* *****************************
+ * PWN_Set
+ * Input:
+ * freq 频率，单位Hz
+ * duty_cyrcle 占空比，0-100
+ * *****************************/
+void PWN_Set(u16 freq,u8 duty_cyrcle)
+{
+	Pwm_Frequence = freq;
+	Pwm_Duty_Cycle = duty_cyrcle;
+
+	u16 pwm_freq_tmp = 8000000/Pwm_Frequence-1;						//CCR0的计数值代表周期
+	u16 pwm_duty_cycle_tmp = (Pwm_Duty_Cycle/100.f) * pwm_freq_tmp;	//CCR1的比较值代表占空比
+
+	TA1CCR0 = pwm_freq_tmp;         	 		// PWM Period
+	TA1CCTL1 = OUTMOD_7;                        // CCR1 reset/set
+	TA1CCR1 = pwm_duty_cycle_tmp;               // CCR1 PWM duty cycle
+}
 
 int main(void)
 {
-	WDTCTL = WDTPW + WDTHOLD;                 // Stop WDT
+	WDTCTL = WDTPW + WDTHOLD;                 	// Stop WDT
 
 	//////////////////////////////////////////////////////////////
 
 	//LED
-	P1DIR |= BIT0 + BIT6;                     // P1.0 P1.6 output
+	P1DIR |= BIT0 + BIT6;                     	// P1.0 P1.6 output
 
 	//////////////////////////////////////////////////////////////
 
 	//Set clock
 	//ACLK 12k, MCLK 16M, SMCLK 8M
-	if (CALBC1_16MHZ==0xFF)                   // If calibration constant erased
+	if (CALBC1_16MHZ==0xFF)                   	// If calibration constant erased
 	{
-		while(1);                             // do not load, trap CPU!!
+		while(1);                             	// do not load, trap CPU!!
 	}
-	DCOCTL = 0;                               // Select lowest DCOx and MODx settings
-	BCSCTL1 = CALBC1_16MHZ;                   // Set range
-	BCSCTL1 &= (0x0F | XT2OFF);               // Clear bit 4-6
+	DCOCTL = 0;                               	// Select lowest DCOx and MODx settings
+	BCSCTL1 = CALBC1_16MHZ;                   	// Set range
+	BCSCTL1 &= (0x0F | XT2OFF);               	// Clear bit 4-6
 	BCSCTL1 |= XT2OFF;
-	DCOCTL = CALDCO_16MHZ;                    // Set DCO step + modulation*/
+	DCOCTL = CALDCO_16MHZ;                    	// Set DCO step + modulation*/
 
 	BCSCTL3 = LFXT1S1 + XCAP0 + XT2OF + LFXT1OF;    // Use VLOCLK for ACLK
 	BCSCTL2 = SELM_0 + DIVM_0 + DIVS_1;             // MCLK to DCOCLK with /1 and SMCLK to DCOCLK with /2
@@ -73,8 +107,8 @@ int main(void)
 	//////////////////////////////////////////////////////////////
 
 	//PWM
-	unsigned int pwm_freq_tmp = 8000000/PWM_Frequence-1;						//CCR0的计数值代表周期
-	unsigned int pwm_duty_cycle_tmp = (PWM_Duty_Cycle/100.f) * pwm_freq_tmp;	//CCR1的比较值代表占空比
+	u16 pwm_freq_tmp = 8000000/Pwm_Frequence-1;						//CCR0的计数值代表周期
+	u16 pwm_duty_cycle_tmp = (Pwm_Duty_Cycle/100.f) * pwm_freq_tmp;	//CCR1的比较值代表占空比
 
 	//Timer1_A PWM Out
 	P2DIR |= BIT1;                            	// P2.1 output
@@ -125,8 +159,8 @@ int main(void)
 
 			///////////////////////////////////////////////////////
 
-			static unsigned int led_counter_1 = 0;
-			static unsigned int led_counter_2 = 0;
+			static u8 led_counter_1 = 0;
+			static u8 led_counter_2 = 0;
 
 			led_counter_1++;
 			if(led_counter_1 > 50)
@@ -144,12 +178,22 @@ int main(void)
 
 			////////////////////////////////////////////////////////
 
-			// 电压实际值 = adc_in / 1024 * 3.3V
-			if (adc_in < 0x1FF)							// 低于1/2参考电压，LED1熄灭，高于1/2参考电压时，LED1点亮
-				P1OUT &= ~0x01;                       	// Clear P1.0 LED off
-			else
-				P1OUT |= 0x01;                        	// Set P1.0 LED on
+
+
 		}
+
+		if(counter_100ms >= 100)	//5ms周期
+		{
+			counter_100ms = 0;
+
+			UART_Send_Byte(adc_in);	//发送电压采集值，但只能发送低八位
+		}
+
+		// 电压实际值 = adc_in / 1024 * 3.3V
+		if (adc_in < 0x1FF)							// 低于1/2参考电压，LED1熄灭，高于1/2参考电压时，LED1点亮
+			P1OUT &= ~0x01;                       	// Clear P1.0 LED off
+		else
+			P1OUT |= 0x01;                        	// Set P1.0 LED on
 	}
 }
 
@@ -163,8 +207,12 @@ void __attribute__ ((interrupt(USCIAB0RX_VECTOR))) USCI0RX_ISR (void)
 #error Compiler not supported!
 #endif
 {
-	while (!(IFG2&UCA0TXIFG));                // USCI_A0 TX buffer ready?
-	UCA0TXBUF = UCA0RXBUF;                    // TX -> RXed character
+//	while (!(IFG2&UCA0TXIFG));                // USCI_A0 TX buffer ready?
+//	UCA0TXBUF = UCA0RXBUF;                    // TX -> RXed character
+	u8 tmp = UCA0RXBUF;
+	if(tmp > 99 || tmp == 0)	//防止占空比大于等于100或等于0
+		tmp = 50;
+	PWN_Set(10000,tmp);	//设置占空比
 }
 
 // Timer A0 interrupt service routine
@@ -178,5 +226,6 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer_A (void)
 #endif
 {
 	counter_5ms++;
+	counter_100ms++;
 	CCR0 += 40000;                            // Add Offset to CCR0			5ms中断周期
 }
