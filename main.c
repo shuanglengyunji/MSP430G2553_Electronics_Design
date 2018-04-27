@@ -26,6 +26,16 @@
  */
 
 #include <msp430.h>
+#include <stdio.h>
+#include <string.h>
+
+// To set the use of printf in msp430
+// Please see the webpage below: http://processors.wiki.ti.com/index.php/Printf_support_for_MSP430_CCSTUDIO_compiler
+#define UART_PRINTF
+#ifdef UART_PRINTF
+int fputc(int _c, register FILE *_fp);
+int fputs(const char *_ptr, register FILE *_fp);
+#endif
 
 #define u8 unsigned char
 #define u16 unsigned int
@@ -124,7 +134,7 @@ int main(void)
 	//ADC10
 	//ADC自动循环采样，并将结果存入adc_in
 	ADC10CTL0 = ADC10SHT_2 + ADC10ON + MSC;		// ADC10ON + 循环采样
-	ADC10CTL1 = INCH_7 + CONSEQ_2;             	// input A7 + 重复采样模式
+	ADC10CTL1 = INCH_7 + CONSEQ_2;  			// input A7 + 重复采样模式
 	ADC10AE0 |= 0x80;                         	// PA.7 ADC option select
 	ADC10DTC0 |= ADC10CT;						// 连续采样
 	ADC10DTC1 = 0x01;
@@ -186,7 +196,13 @@ int main(void)
 		{
 			counter_500ms = 0;
 
-			UART_Send_Byte(adc_in);	//发送电压采集值，但只能发送低八位
+			float voltage = 0.0f;
+			voltage = (float)adc_in * 3.3f / 1024.0f;
+			u8 send_int = (u8)voltage;
+			u8 send_dec = ((u8)(voltage*10.0f)) % 10;
+
+			//UART_Send_Byte(adc_in);	//发送电压采集值，但只能发送低八位
+			printf("%d.%d\r\n",send_int,send_dec);
 		}
 
 		// 电压实际值 = adc_in / 1024 * 3.3V
@@ -207,8 +223,6 @@ void __attribute__ ((interrupt(USCIAB0RX_VECTOR))) USCI0RX_ISR (void)
 #error Compiler not supported!
 #endif
 {
-//	while (!(IFG2&UCA0TXIFG));                // USCI_A0 TX buffer ready?
-//	UCA0TXBUF = UCA0RXBUF;                    // TX -> RXed character
 	u8 tmp = UCA0RXBUF;
 	if(tmp > 99 || tmp == 0)	//防止占空比大于等于100或等于0
 		tmp = 50;
@@ -229,3 +243,28 @@ void __attribute__ ((interrupt(TIMER0_A0_VECTOR))) Timer_A (void)
 	counter_500ms++;
 	CCR0 += 40000;                            // Add Offset to CCR0			5ms中断周期
 }
+
+#ifdef UART_PRINTF
+int fputc(int _c, register FILE *_fp)
+{
+	while (!(IFG2&UCA0TXIFG));                	// USCI_A0 TX buffer ready?
+	UCA0TXBUF = (unsigned char) _c;             // TX -> RXed character
+
+	return((unsigned char)_c);
+}
+
+int fputs(const char *_ptr, register FILE *_fp)
+{
+	unsigned int i, len;
+
+	len = strlen(_ptr);
+
+	for(i=0 ; i<len ; i++)
+	{
+		while (!(IFG2&UCA0TXIFG));                	// USCI_A0 TX buffer ready?
+		UCA0TXBUF = (unsigned char) _ptr[i];        // TX -> RXed character
+	}
+
+	return len;
+}
+#endif
