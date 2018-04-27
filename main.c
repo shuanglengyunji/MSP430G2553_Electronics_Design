@@ -1,10 +1,6 @@
 #include <msp430.h>
 
 /**
- * initialization of the msp430.
- * 0.close watch dog
- * 1.system clock
- * 2.Set P1 and P2
  *   P1.0	LED1
  *   P1.1	UART1 TX
  *   P1.2	UART1 RX
@@ -19,10 +15,6 @@
  *   P2.3
  *   P2.4
  *   P2.5
- * 3.Serial Port in Interrupt mode
- * 5.Timer A for PWN out
- * 6.Timer B for System and Delay
- * 7.ADC 10
  */
 
 #include <msp430.h>
